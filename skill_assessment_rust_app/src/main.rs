@@ -1,27 +1,74 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::collections::HashMap;
+use std::io::ErrorKind;
+
+fn converttostring(mut value: String) -> String {
+
+    if value == "1" {
+        value = "true".to_string();
+    }
+    else if value == "0" {
+        value = "false".to_string();            
+    }
+
+    value
+}
+
+// 0 or 1以外の1桁の場合は不備の為ロードしない。
+fn isbool(value: String) -> bool {
+    
+    let mut result = false;
+
+    if value.len() != 1 {
+        result = true;  
+    }
+    else {
+        if value == "1" {
+            result = true;
+        }
+        else if value == "0" {
+            result = true;            
+        }   
+    }
+
+    result
+}
 
 fn main() {
     let path = "sysctl.conf";
-    let file = File::open(path).unwrap();
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) => match error.kind() {
+            ErrorKind::NotFound => panic!("ファイルが見つかりませんでした。"),
+            _ => panic!("ファイルのオープンに失敗しました： {:?}", error),
+        }
+    };
     let reader: BufReader<File> = BufReader::new(file);
-    let mut v: Vec<String> = Vec::new();
+    let mut map: HashMap<String, String> = HashMap::new();
 
     for line in reader.lines() {
         let conftxt = line.unwrap();
 
-        if conftxt.contains("kernel.endpoint") {
-            v.push(conftxt);
+        if conftxt.contains("#"){
+            continue;
         }
-        else if conftxt.contains("kernel.debug") {
-            v.push(conftxt);
+        else if conftxt.is_empty() {
+            continue;            
         }
-        else if conftxt.contains("kernel.log.file") {
-            v.push(conftxt);
-        }
-    }
 
-    println!("{}", v[0]);
-    println!("{}", v[1]);
-    println!("{}", v[2]);
+        let v: Vec<&str> = conftxt.split('=').collect::<Vec<&str>>();
+        let mut value: String = v[1].chars().filter(|c| !c.is_whitespace()).collect();
+        
+        let keys: Vec<&str> = v[0].split('.').collect::<Vec<&str>>();
+        let key: &str = keys.last().unwrap();
+
+        if isbool(value.clone()) == false {
+            continue;            
+        };
+
+        value = converttostring(value);
+        map.insert(String::from(key.to_string()), String::from(value));
+        println!("{}:{}", key, map.get(key).unwrap());    
     }
+}
